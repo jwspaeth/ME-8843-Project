@@ -1,3 +1,4 @@
+import logging
 import random
 
 import hydra
@@ -12,7 +13,7 @@ from me_8843_project.config.default_structured_configs import (
 from me_8843_project.core.Trainer import Trainer
 
 
-def execute_exp(config: "DictConfig", run_type: str) -> None:
+def execute_exp(config: "DictConfig") -> None:
     r"""This function runs the specified config with the specified runtype
     Args:
     config: DictConfig
@@ -24,23 +25,20 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
     if config.force_torch_single_threaded and torch.cuda.is_available():
         torch.set_num_threads(1)
 
-    trainer = Trainer(config)
+    trainer = Trainer(**config.trainer_config)
 
-    if run_type == "train":
+    if not config.evaluate:
         trainer.train()
-    elif run_type == "eval":
+    else:
         trainer.eval()
 
 
-@hydra.main(
-    config_path="config",
-    config_name="base/default",
-)
+@hydra.main(version_base="1.3", config_path="config/base", config_name="lunar_lander")
 def main(cfg: "DictConfig"):
     with read_write(cfg):
         OmegaConf.resolve(cfg)
     print(OmegaConf.to_yaml(cfg))
-    execute_exp(cfg, "eval" if cfg.evaluate else "train")
+    execute_exp(cfg.base)
 
 
 if __name__ == "__main__":

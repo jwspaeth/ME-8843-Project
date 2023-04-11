@@ -1,13 +1,18 @@
+import logging
 import os
 from typing import Any, Optional
 
+import cv2
 import numpy as np
 from omegaconf import OmegaConf
+from PIL import Image, ImageDraw
 
 try:
     import wandb
 except ImportError:
     wandb = None
+
+logger = logging.getLogger(__name__)
 
 
 class WeightsAndBiasesWriter:
@@ -22,14 +27,14 @@ class WeightsAndBiasesWriter:
         Integrates with https://wandb.ai logging service.
         """
         wb_kwargs = {}
-        if config.wb.project_name != "":
-            wb_kwargs["project"] = config.wb.project_name
-        if config.wb.run_name != "":
-            wb_kwargs["name"] = config.wb.run_name
-        if config.wb.entity != "":
-            wb_kwargs["entity"] = config.wb.entity
-        if config.wb.group != "":
-            wb_kwargs["group"] = config.wb.group
+        if config.project_name != "":
+            wb_kwargs["project"] = config.project_name
+        if config.run_name != "":
+            wb_kwargs["name"] = config.run_name
+        if config.entity != "":
+            wb_kwargs["entity"] = config.entity
+        if config.group != "":
+            wb_kwargs["group"] = config.group
         slurm_info_dict = {
             k[len("SLURM_") :]: v
             for k, v in os.environ.items()
@@ -49,11 +54,10 @@ class WeightsAndBiasesWriter:
             **wb_kwargs,
         )
 
-    def __getattr__(self, item):
-        if self.writer:
-            return self.writer.__getattribute__(item)
-        else:
-            return lambda *args, **kwargs: None
+        self.video_option = config.video_option
+        self.video_dir = config.video_dir
+        self.video_fps = config.video_fps
+        self.video_frames = []
 
     def add_scalars(self, log_group, data_dict, step_id):
         log_data_dict = {
@@ -63,6 +67,9 @@ class WeightsAndBiasesWriter:
 
     def add_scalar(self, key, value, step_id):
         wandb.log({key: value}, step=int(step_id))  # type: ignore[attr-defined]
+
+    def log_metrics(self, metrics, step_id):
+        wandb.log(metrics, step=int(step_id))  # type: ignore[attr-defined]
 
     def __enter__(self):
         return self
@@ -74,7 +81,26 @@ class WeightsAndBiasesWriter:
         if self.run:
             self.run.finish()
 
-    def add_video_from_np_images(
-        self, video_name: str, step_idx: int, images: np.ndarray, fps: int = 10
-    ) -> None:
-        raise NotImplementedError("Not supported")
+    def log_image_to_video(self, image):
+        self.video_frames.append(image)
+
+    def save_video(self, video_name):
+        if self.video_frames:
+            os.makedirs(self.video_dir, exist_ok=True)
+            videodims = [self.video_frames[0].shape[1], self.video_frames[0].shape[0]]
+            fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
+            video = cv2.VideoWriter(
+                f"{self.video_dir}/{video_name}.mp4", fourcc, self.video_fps, videodims
+            )
+            for i in range(len(self.video_frames)):
+                video.write(self.video_frames[i])
+            video.release()
+        else:
+            raise Exception("No video frames to save.")
+
+    def save_and_clear_video(self, video_name):
+        self.save_video(video_name)
+        self.clear_video()
+
+    def clear_video(self):
+        self.video_frames.clear()

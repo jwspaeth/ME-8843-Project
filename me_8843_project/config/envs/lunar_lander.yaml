@@ -1,0 +1,5 @@
+defaults:
+  - base/default
+  - _self_
+
+base:

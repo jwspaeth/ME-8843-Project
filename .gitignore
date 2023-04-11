@@ -1,3 +1,7 @@
+wandb/
+video_dir/
+outputs/
+.DS_Store
 .idea/
 
 # Byte-compiled / optimized / DLL files

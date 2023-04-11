@@ -1,0 +1,13 @@
+defaults:
+  - /base/base_config
+  - /envs: lunar_lander_config
+  - /policies: random_policy_config
+  - /models/encoder: lunar_encoder_config
+  - /models/decoder: lunar_decoder_config
+  - /models/transition_model: lunar_transition_model_config
+  - /models/reward_model: lunar_reward_model_config
+  - _self_
+
+base:
+  trainer_config:
+    max_env_steps: 100000
