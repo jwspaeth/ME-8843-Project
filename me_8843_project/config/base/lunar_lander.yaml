@@ -1,7 +1,8 @@
 defaults:
   - /base/base_config
   - /envs: lunar_lander_config
-  - /policies: random_policy_config
+  #- /policies: random_policy_config
+  - /policies: trajectory_optimizer_policy_config
   - /models/encoder: lunar_encoder_config
   - /models/decoder: lunar_decoder_config
   - /models/transition_model: lunar_transition_model_config
@@ -10,4 +11,13 @@ defaults:
 
 base:
   trainer_config:
+    logging_config:
+        wb:
+          video_size: [64, 64]
+          video_gray_conversion: True
+        episode_log_interval: 1
+        training_log_interval: 10
     max_env_steps: 100000
+    obs_size: [64, 64]
+    obs_gray_conversion: True
+    training_steps: 2

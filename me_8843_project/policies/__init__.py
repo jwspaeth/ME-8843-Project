@@ -1,2 +1,2 @@
 from .RandomPolicy import RandomPolicy
-from .TrajectoryOptimizer import TrajectoryOptimizer
+from .TrajectoryOptimizer import TrajectoryOptimizerPolicy

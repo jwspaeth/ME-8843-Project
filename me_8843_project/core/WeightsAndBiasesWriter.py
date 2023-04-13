@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 from typing import Any, Optional
@@ -57,6 +58,8 @@ class WeightsAndBiasesWriter:
         self.video_option = config.video_option
         self.video_dir = config.video_dir
         self.video_fps = config.video_fps
+        self.video_size = config.video_size
+        self.video_gray_conversion = config.video_gray_conversion
         self.video_frames = []
 
     def add_scalars(self, log_group, data_dict, step_id):
@@ -82,18 +85,33 @@ class WeightsAndBiasesWriter:
             self.run.finish()
 
     def log_image_to_video(self, image):
+        image = copy.deepcopy(image)
         self.video_frames.append(image)
 
     def save_video(self, video_name):
         if self.video_frames:
+            processed_video = copy.deepcopy(self.video_frames)
+            for i in range(len(processed_video)):
+
+                if self.video_size is not None:
+                    processed_video[i] = cv2.resize(processed_video[i], self.video_size)
+
+                if self.video_gray_conversion:
+                    processed_video[i] = cv2.cvtColor(
+                        processed_video[i], cv2.COLOR_RGB2GRAY
+                    )
+                    processed_video[i] = cv2.cvtColor(
+                        processed_video[i], cv2.COLOR_GRAY2RGB
+                    )
+
             os.makedirs(self.video_dir, exist_ok=True)
-            videodims = [self.video_frames[0].shape[1], self.video_frames[0].shape[0]]
+            videodims = [processed_video[0].shape[1], processed_video[0].shape[0]]
             fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
             video = cv2.VideoWriter(
                 f"{self.video_dir}/{video_name}.mp4", fourcc, self.video_fps, videodims
             )
             for i in range(len(self.video_frames)):
-                video.write(self.video_frames[i])
+                video.write(processed_video[i])
             video.release()
         else:
             raise Exception("No video frames to save.")

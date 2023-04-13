@@ -26,11 +26,14 @@ class WBConfig:
     video_dir: str = "video_dir"
     video_fps: int = 50  # default for lunar lander
     video_option: bool = False
+    video_size: Optional[List[int]] = None
+    video_gray_conversion: bool = False
 
 
 @dataclass
 class LoggingConfig:
-    log_interval: int = 5
+    episode_log_interval: int = 5
+    training_log_interval: int = 5
     log_file: str = "train.log"
     wb: WBConfig = WBConfig()
 
@@ -100,6 +103,10 @@ class TrainerConfig:
     num_checkpoints: int = 10
     max_env_episodes: int = 1000
     max_env_steps: Optional[int] = 1000
+    obs_size: Optional[List[int]] = None
+    obs_gray_conversion: bool = False
+    batch_size: int = 32
+    training_steps: int = 1000
 
 
 @dataclass
