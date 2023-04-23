@@ -1,10 +1,12 @@
 import copy
+import json
 import logging
 import os
 from typing import Any, Optional
 
 import cv2
 import numpy as np
+import torch
 from omegaconf import OmegaConf
 from PIL import Image, ImageDraw
 
@@ -72,7 +74,16 @@ class WeightsAndBiasesWriter:
         wandb.log({key: value}, step=int(step_id))  # type: ignore[attr-defined]
 
     def log_metrics(self, metrics, step_id):
+        self.print_metrics(metrics)
         wandb.log(metrics, step=int(step_id))  # type: ignore[attr-defined]
+
+    def print_metrics(self, metrics):
+        pretty_str = ""
+        for key, item in metrics.items():
+            if isinstance(item, torch.Tensor):
+                item = item.squeeze()
+            pretty_str += f"- {key}: {item} -"
+        logger.info(f"Metrics: {pretty_str}")
 
     def __enter__(self):
         return self

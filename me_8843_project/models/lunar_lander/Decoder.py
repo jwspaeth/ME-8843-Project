@@ -54,8 +54,8 @@ class Decoder(pl.LightningModule):
         o_1 = torch.reshape(o_1, (o_1.shape[0], 20, 4, 4))
         o_2 = o[:, 320:]
         o_2 = torch.reshape(o_2, (o_2.shape[0], 20, 4, 4))
-        o_1 = self.conv_decoder(o_1)
-        o_2 = self.conv_decoder(o_2)
+        o_1 = torch.sigmoid(self.conv_decoder(o_1))
+        o_2 = torch.sigmoid(self.conv_decoder(o_2))
 
         return o_1, o_2
 

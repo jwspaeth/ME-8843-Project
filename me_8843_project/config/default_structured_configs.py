@@ -46,9 +46,8 @@ class ReplayBufferConfig:
 
 @dataclass
 class ReloadConfig:
-    ckpt_path: str = "data/checkpoints/ckpt.0.pth"
-    state: bool = False
-    config: bool = False
+    path: str = "checkpoints"
+    reload: bool = False
 
 
 @dataclass
@@ -99,14 +98,17 @@ class TrainerConfig:
     eval_config: EvalConfig = EvalConfig()
     logging_config: LoggingConfig = LoggingConfig()
     checkpoint_interval: int = -1
-    checkpoint_folder: str = "data/checkpoints"
+    checkpoint_folder: str = "checkpoints"
     num_checkpoints: int = 10
     max_env_episodes: int = 1000
-    max_env_steps: Optional[int] = 1000
+    max_env_steps: Optional[int] = 10000
     obs_size: Optional[List[int]] = None
     obs_gray_conversion: bool = False
     batch_size: int = 32
-    training_steps: int = 1000
+    max_training_epochs: Optional[int] = 1
+    reconstruction_lr: float = 1e-3
+    reward_lr: float = 1e-3
+    transition_lr: float = 1e-3
 
 
 @dataclass
@@ -135,6 +137,11 @@ class RandomPolicyConfig(PolicyConfig):
 @dataclass
 class TrajectoryOptimizerPolicyConfig(PolicyConfig):
     _target_: str = "me_8843_project.policies.TrajectoryOptimizerPolicy"
+    threshold_flag: bool = False
+    convergence_threshold: float = 1e-3
+    lr: float = 1e-3
+    constraint_multipler: float = 1.0
+    n_planning_steps: int = 1000
 
 
 @dataclass
@@ -158,45 +165,45 @@ class LunarTransitionModelConfig(TransitionModelConfig):
 
 
 # Register structured configs in hydra registry
-cs.store(group="base", name="base_config", node=BaseConfig)
+cs.store(name="base_config", node=BaseConfig)
 cs.store(
-    package="base.trainer_config.env_config",
+    package="trainer_config.env_config",
     group="envs",
     name="lunar_lander_config",
     node=LunarLanderEnvConfig,
 )
 cs.store(
-    package="base.trainer_config.policy_config",
+    package="trainer_config.policy_config",
     group="policies",
     name="random_policy_config",
     node=RandomPolicyConfig,
 )
 cs.store(
-    package="base.trainer_config.policy_config",
+    package="trainer_config.policy_config",
     group="policies",
     name="trajectory_optimizer_policy_config",
     node=TrajectoryOptimizerPolicyConfig,
 )
 cs.store(
-    package="base.trainer_config.encoder_config",
+    package="trainer_config.encoder_config",
     group="models/encoder",
     name="lunar_encoder_config",
     node=LunarEncoderConfig,
 )
 cs.store(
-    package="base.trainer_config.decoder_config",
+    package="trainer_config.decoder_config",
     group="models/decoder",
     name="lunar_decoder_config",
     node=LunarDecoderConfig,
 )
 cs.store(
-    package="base.trainer_config.reward_model_config",
+    package="trainer_config.reward_model_config",
     group="models/reward_model",
     name="lunar_reward_model_config",
     node=LunarRewardModelConfig,
 )
 cs.store(
-    package="base.trainer_config.transition_model_config",
+    package="trainer_config.transition_model_config",
     group="models/transition_model",
     name="lunar_transition_model_config",
     node=LunarTransitionModelConfig,

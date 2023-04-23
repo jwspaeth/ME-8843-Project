@@ -30,6 +30,6 @@ class TransitionModel(pl.LightningModule):
         x = torch.cat((state, action), 1)
         r = F.relu(self.fc1(x))
         r = F.relu(self.fc2(r))
-        r = F.relu(self.fc3(r))
+        r = torch.sigmoid(self.fc3(r))
 
         return r

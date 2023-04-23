@@ -36,7 +36,7 @@ class Encoder(pl.LightningModule):
         s = torch.cat((s_1, s_2), 1)
         s = F.relu(self.fc1(s))
         s = F.relu(self.fc2(s))
-        s = self.fc3(s)
+        s = torch.sigmoid(self.fc3(s))
         return s
 
     def conv_encoder(self, x):

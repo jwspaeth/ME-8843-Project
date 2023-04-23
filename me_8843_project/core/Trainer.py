@@ -1,4 +1,5 @@
 import logging
+import os
 
 import cv2
 import gymnasium as gym
@@ -9,9 +10,15 @@ import torch.nn.functional as F
 from me_8843_project.core.ObservationQueue import ObservationQueue
 from me_8843_project.core.ReplayBuffer import ReplayBuffer
 from me_8843_project.core.WeightsAndBiasesWriter import WeightsAndBiasesWriter
+from omegaconf import DictConfig, OmegaConf, read_write
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+"""
+- Investigate trajectory optimization
+- Investigate if using decoder is necessary
+"""
 
 
 class Trainer:
@@ -34,17 +41,16 @@ class Trainer:
         eval_config,
         max_env_steps=None,
         max_env_episodes=1000,
-        training_steps=1000,
+        max_training_epochs=1,
         ckpt_config=None,
         checkpoint_interval=-1,
         checkpoint_folder="data/checkpoints",
         num_checkpoints=10,
         obs_size=None,
         obs_gray_conversion=False,
-        model_learning_rate=1e-3,
-        reconstruction_loss_weight=1.0,
-        reward_loss_weight=1.0,
-        transition_loss_weight=1.0,
+        reconstruction_lr=1e-3,
+        reward_lr=1e-3,
+        transition_lr=1e-3,
         batch_size=32,
     ):
         # Setup environment
@@ -54,20 +60,12 @@ class Trainer:
         self.models = {
             "encoder": hydra.utils.instantiate(encoder_config),
             "decoder": hydra.utils.instantiate(decoder_config),
-            "transition_model": hydra.utils.instantiate(transition_model_config),
-            "reward_model": hydra.utils.instantiate(reward_model_config),
+            "transition": hydra.utils.instantiate(transition_model_config),
+            "reward": hydra.utils.instantiate(reward_model_config),
         }
         if torch.cuda.is_available():
             for model in self.models.values():
                 model.cuda()
-
-        # Setup model optimizer
-        self.model_learning_rate = model_learning_rate
-        params = []
-        for values in self.models.values():
-            for param in values.parameters():
-                params.append(param)
-        self.model_optimizer = torch.optim.Adam(params, lr=self.model_learning_rate)
 
         # Setup policy
         self.policy = hydra.utils.instantiate(
@@ -80,7 +78,7 @@ class Trainer:
         self.replay_buffer = ReplayBuffer(**replay_buffer_config)
         self.max_env_steps = max_env_steps
         self.max_env_episodes = max_env_episodes
-        self.training_steps = training_steps
+        self.max_training_epochs = max_training_epochs
         self.eval_config = eval_config
         self.ckpt_config = ckpt_config
         self.checkpoint_interval = checkpoint_interval
@@ -88,10 +86,13 @@ class Trainer:
         self.num_checkpoints = num_checkpoints
         self.obs_size = obs_size
         self.obs_gray_conversion = obs_gray_conversion
-        self.reconstruction_loss_weight = reconstruction_loss_weight
-        self.reward_loss_weight = reward_loss_weight
-        self.transition_loss_weight = transition_loss_weight
         self.batch_size = batch_size
+        self.reconstruction_lr = reconstruction_lr
+        self.reward_lr = reward_lr
+        self.transition_lr = transition_lr
+
+        # Setup model optimizer
+        self.model_optimizers = self.create_model_optimizers()
 
         # Setup counters
         self.total_env_step_count = 0
@@ -104,6 +105,7 @@ class Trainer:
         if self.obs_gray_conversion:
             obs = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
             obs = np.expand_dims(obs, axis=2)
+            obs = obs / 255.0  # Normalize
 
         obs = np.transpose(obs, (2, 0, 1))
         obs = np.expand_dims(obs, axis=0)
@@ -125,7 +127,7 @@ class Trainer:
         return reward
 
     def generate_samples(self):
-        logger.info("Generating samples.")
+        logger.info("\tGenerating samples.")
 
         # Continue training until max_episodes or convergence is reached
         # Queue holds most recent 3 observations, which is required for training
@@ -136,7 +138,7 @@ class Trainer:
             "episode_length": None,
         }
         while episode_count < self.max_env_episodes:
-            logger.info(f"Episode: {episode_count}")
+            logger.info(f"\t\tEpisode: {episode_count}")
             observation, info = self.env.reset()
             if self.env.render_mode is not None:
                 observation = self.env.render()
@@ -192,7 +194,7 @@ class Trainer:
                         terminated=terminated,
                     )
                 else:
-                    logger.info("Observation queue is not full, buffering.")
+                    logger.info("\t\tObservation queue is not full, buffering.")
 
                 # Set variables for next iteration
                 step_count += 1
@@ -223,6 +225,46 @@ class Trainer:
 
         return step_condition and not terminated
 
+    def create_model_optimizers(self):
+        model_optimizers = {
+            "reconstruction": None,
+            "reward": None,
+            "transition": None,
+        }
+
+        # Reconstruction optimizers optimizes both encoder and decoder
+        reconstruction_params = list(self.models["encoder"].parameters()) + list(
+            self.models["decoder"].parameters()
+        )
+        model_optimizers["reconstruction"] = torch.optim.Adam(
+            reconstruction_params, lr=self.reconstruction_lr
+        )
+
+        reward_params = list(self.models["reward"].parameters())
+        model_optimizers["reward"] = torch.optim.Adam(reward_params, lr=self.reward_lr)
+
+        transition_params = list(self.models["transition"].parameters())
+        model_optimizers["transition"] = torch.optim.Adam(
+            transition_params, lr=self.transition_lr
+        )
+
+        return model_optimizers
+
+    def checkpoint_models(self):
+        # Create checkpoint folder if it doesn't exist
+        os.makedirs(self.checkpoint_folder, exist_ok=True)
+
+        # Save models
+        for model_name, model in self.models.items():
+            model_path = os.path.join(self.checkpoint_folder, f"{model_name}.pt")
+            torch.save(model.state_dict(), model_path)
+
+    def reload_models(self, checkpoint_folder):
+        # Load models
+        for model_name, model in self.models.items():
+            model_path = os.path.join(checkpoint_folder, f"{model_name}.pt")
+            model.load_state_dict(torch.load(model_path))
+
     def train_models(self):
         """
         Different training losses are:
@@ -234,13 +276,12 @@ class Trainer:
         will switch to individual optimizers or separate updates.
         :return:
         """
-        logger.info("Training models.")
-
+        logger.info(
+            f"\tTraining models. Replay buffer length: {len(self.replay_buffer)}"
+        )
+        dataloader = self.replay_buffer.get_dataloader(self.batch_size)
         # Train models
-        for i in range(self.training_steps):
-            # Sample a batch from the replay buffer
-            batch = self.replay_buffer.sample_batch(self.batch_size)
-
+        for batch in tqdm(dataloader):
             # Unpack batch
             obs_1, obs_2, obs_3 = (
                 batch["observation_1"],
@@ -252,38 +293,36 @@ class Trainer:
             # Get all model outputs
             encoder_state_hat = self.models["encoder"](obs_1, obs_2)
             encoder_next_state_hat = self.models["encoder"](obs_2, obs_3)
-            obs_1_hat, obs_2_hat_1 = self.models["decoder"](encoder_state_hat)
+            obs_1_hat, obs_2_hat_1 = self.models["decoder"](
+                encoder_state_hat
+            )  # Need to maintain gradient with encoder
             obs_2_hat_2, obs_3_hat = self.models["decoder"](encoder_next_state_hat)
-            transition_next_state_hat = self.models["transition_model"](
-                encoder_state_hat, action
+            transition_next_state_hat = self.models["transition"](
+                encoder_state_hat.detach(), action
             )
-            reward_hat = self.models["reward_model"](encoder_state_hat)
+            reward_hat = self.models["reward"](encoder_state_hat.detach())
 
             # Calculate losses
+            losses = {}
             obs_hat = torch.cat((obs_1_hat, obs_2_hat_1, obs_2_hat_2, obs_3_hat), dim=0)
             obs = torch.cat((obs_1, obs_2, obs_2, obs_3), dim=0)
-            reconstruction_loss = F.mse_loss(obs_hat, obs)
-            transition_loss = F.mse_loss(
-                transition_next_state_hat, encoder_next_state_hat
+            losses["reconstruction"] = F.mse_loss(obs_hat, obs)
+            losses["transition"] = F.mse_loss(
+                transition_next_state_hat, encoder_next_state_hat.detach()
             )
-            reward_loss = F.mse_loss(reward_hat, reward)
-            total_loss = (
-                self.reconstruction_loss_weight * reconstruction_loss
-                + self.transition_loss_weight * transition_loss
-                + self.reward_loss_weight * reward_loss
-            )
+            losses["reward"] = F.mse_loss(reward_hat, reward)
 
             # Update models
-            self.model_optimizer.zero_grad()
-            total_loss.backward()
-            self.model_optimizer.step()
+            for key in self.model_optimizers.keys():
+                self.model_optimizers[key].zero_grad()
+                losses[key].backward()
+                self.model_optimizers[key].step()
 
             # Record metrics
             training_metrics = {
-                "reconstruction_loss": reconstruction_loss.item(),
-                "transition_loss": transition_loss.item(),
-                "reward_loss": reward_loss.item(),
-                "total_loss": total_loss.item(),
+                "reconstruction_loss": losses["reconstruction"].item(),
+                "transition_loss": losses["transition"].item(),
+                "reward_loss": losses["reward"].item(),
             }
             if (
                 self.total_training_step_count
@@ -296,27 +335,86 @@ class Trainer:
 
             self.total_training_step_count += 1
 
-        # TODO: Checkpoint models
+        self.checkpoint_models()
 
     def train(self):
-        # TODO: Add convergence check
-        converged = False
-        # while not converged:
-        #     self.generate_samples()
-        #     self.train_models()
-        for i in range(2):
+        total_training_epochs = 0
+        while not self.train_end_condition(total_training_epochs):
+            logger.info(f"Epoch: {total_training_epochs}")
             self.generate_samples()
             self.train_models()
+            total_training_epochs += 1
+        logger.info(f"Training complete.")
+
+    def train_end_condition(self, total_training_epochs):
+        if self.max_training_epochs is None:
+            return True  # TODO: Use better check here
+        else:
+            return total_training_epochs >= self.max_training_epochs
 
     def eval(self):
         self.generate_samples()
 
     @classmethod
-    def reload_from_ckpt(cls, ckpt_path):
-        # TODO: Implement
-        raise NotImplementedError
+    def reload_from_ckpt(cls, config):
+        # Load config from checkpoint
+        ckpt_folder_path = config.reload_config.path
+        config_path = os.path.join(ckpt_folder_path, "config.yaml")
+        with open(config_path, "r") as f:
+            ckpt_config = OmegaConf.load(f)
+
+        # Merge configs, preserving relevant current config values
+        config = cls.merge_ckpt_config(config, ckpt_config)
+
+        # Create trainer
+        trainer = cls(**config.trainer_config)
+
+        # Reload models
+        trainer.reload_models(ckpt_folder_path)
+
+        return trainer
 
     @classmethod
     def merge_ckpt_config(cls, config, ckpt_config):
-        # TODO: Implement
-        raise NotImplementedError
+        # Some values should be preserved from the current config
+        with read_write(config):
+            config.trainer_config.eval_config = cls.config_copy(
+                config.trainer_config.eval_config,
+                ckpt_config.trainer_config.eval_config,
+            )
+            config.trainer_config.logging_config = cls.config_copy(
+                config.trainer_config.logging_config,
+                ckpt_config.trainer_config.logging_config,
+            )
+            config.trainer_config.checkpoint_interval = (
+                ckpt_config.trainer_config.checkpoint_interval
+            )
+            config.trainer_config.checkpoint_folder = (
+                ckpt_config.trainer_config.checkpoint_folder
+            )
+            config.trainer_config.num_checkpoints = (
+                ckpt_config.trainer_config.num_checkpoints
+            )
+            config.trainer_config.max_env_episodes = (
+                ckpt_config.trainer_config.max_env_episodes
+            )
+            config.trainer_config.max_env_steps = (
+                ckpt_config.trainer_config.max_env_steps
+            )
+            config.trainer_config.batch_size = ckpt_config.trainer_config.batch_size
+            config.trainer_config.training_steps = (
+                ckpt_config.trainer_config.training_steps
+            )
+
+        return config
+
+    @classmethod
+    def config_copy(cls, config_1, config_2):
+        # Copy config_2 into config_1
+        for key, value in config_2.items():
+            if isinstance(value, dict) or isinstance(value, DictConfig):
+                cls.config_copy(config_1[key], value)
+            else:
+                config_1[key] = value
+
+        return config_1

@@ -1,5 +1,5 @@
 defaults:
-  - /base/base_config
+  - base_config
   - /envs: lunar_lander_config
   #- /policies: random_policy_config
   - /policies: trajectory_optimizer_policy_config
@@ -9,15 +9,22 @@ defaults:
   - /models/reward_model: lunar_reward_model_config
   - _self_
 
-base:
-  trainer_config:
-    logging_config:
-        wb:
-          video_size: [64, 64]
-          video_gray_conversion: True
-        episode_log_interval: 1
-        training_log_interval: 10
-    max_env_steps: 100000
-    obs_size: [64, 64]
-    obs_gray_conversion: True
-    training_steps: 2
+trainer_config:
+  logging_config:
+      wb:
+        video_size: [64, 64]
+        video_gray_conversion: True
+      episode_log_interval: 1
+      training_log_interval: 1
+  obs_size: [64, 64]
+  obs_gray_conversion: True
+  max_env_episodes: 50
+  max_training_epochs: 1000
+  reconstruction_lr: 0.0001
+  reward_lr: 0.0001
+  transition_lr: 0.0001
+  policy_config:
+    threshold_flag: False
+    n_planning_steps: 100
+    convergence_threshold: -1e-4
+    lr: 0.1

@@ -26,6 +26,6 @@ class RewardModel(pl.LightningModule):
         """
         r = F.relu(self.fc1(state))
         r = F.relu(self.fc2(r))
-        r = F.relu(self.fc3(r))
+        r = self.fc3(r)
 
         return r

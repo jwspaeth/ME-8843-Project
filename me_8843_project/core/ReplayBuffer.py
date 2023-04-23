@@ -60,6 +60,10 @@ class ReplayBuffer:
         """
         Sample a batch of experiences from the replay buffer.
         """
+        # Sample max batch size if batch size is larger than buffer size
+        if len(self.buffer) < batch_size:
+            batch_size = len(self)
+
         batch = random.sample(self.buffer, batch_size)
         batch_dict = {
             "observation_1": [sample.observation_1 for sample in batch],
@@ -77,6 +81,35 @@ class ReplayBuffer:
             "action": torch.cat(batch_dict["action"], dim=0),
         }
         return batch_dict
+
+    def collate_fn(self, batch):
+        """
+        Collate function for the dataloader.
+        """
+        batch_dict = {
+            "observation_1": [sample.observation_1 for sample in batch],
+            "observation_2": [sample.observation_2 for sample in batch],
+            "observation_3": [sample.observation_3 for sample in batch],
+            "reward": [sample.reward for sample in batch],
+            "action": [sample.action for sample in batch],
+            "terminated": [sample.terminated for sample in batch],
+        }
+        batch_dict = {
+            "observation_1": torch.cat(batch_dict["observation_1"], dim=0),
+            "observation_2": torch.cat(batch_dict["observation_2"], dim=0),
+            "observation_3": torch.cat(batch_dict["observation_3"], dim=0),
+            "reward": torch.cat(batch_dict["reward"], dim=0),
+            "action": torch.cat(batch_dict["action"], dim=0),
+        }
+        return batch_dict
+
+    def get_dataloader(self, batch_size):
+        """
+        Return a dataloader for the replay buffer.
+        """
+        return torch.utils.data.DataLoader(
+            self.buffer, batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn
+        )
 
     def __len__(self):
         """
