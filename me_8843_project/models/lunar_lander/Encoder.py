@@ -19,7 +19,7 @@ class Encoder(pl.LightningModule):
         self.pool = nn.MaxPool2d(2, 2)
         self.fc1 = nn.Linear(640, 120)
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 20)
+        self.fc3 = nn.Linear(84, 30)
 
     def forward(self, o_1, o_2):
         """

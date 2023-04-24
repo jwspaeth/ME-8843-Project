@@ -12,7 +12,7 @@ class RewardModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.fc1 = nn.Linear(20, 10)
+        self.fc1 = nn.Linear(30, 10)
         self.fc2 = nn.Linear(10, 5)
         self.fc3 = nn.Linear(5, 1)
 

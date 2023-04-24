@@ -67,7 +67,7 @@ class TrajectoryOptimizerPolicy:
                 prev_result = result
 
             plan_count += 1
-            logger.info(f"Plan count: {plan_count}, delta: {delta}")
+            # logger.info(f"Plan count: {plan_count}, delta: {delta}")
 
         return actions[0].detach().cpu().numpy()
 

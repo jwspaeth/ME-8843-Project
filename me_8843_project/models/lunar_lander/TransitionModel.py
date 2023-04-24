@@ -12,12 +12,12 @@ class TransitionModel(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.save_hyperparameters()
-        self.state_dim = 20
+        self.state_dim = 30
         self.action_dim = 2
 
-        self.fc1 = nn.Linear(22, 30)
+        self.fc1 = nn.Linear(32, 30)
         self.fc2 = nn.Linear(30, 30)
-        self.fc3 = nn.Linear(30, 20)
+        self.fc3 = nn.Linear(30, 30)
 
     def forward(self, state, action):
         """

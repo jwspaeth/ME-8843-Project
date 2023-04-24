@@ -15,16 +15,16 @@ trainer_config:
         video_size: [64, 64]
         video_gray_conversion: True
       episode_log_interval: 1
-      training_log_interval: 1
+      training_log_interval: 5
   obs_size: [64, 64]
   obs_gray_conversion: True
-  max_env_episodes: 50
+  max_env_episodes: 10
   max_training_epochs: 1000
   reconstruction_lr: 0.0001
   reward_lr: 0.0001
   transition_lr: 0.0001
   policy_config:
     threshold_flag: False
-    n_planning_steps: 100
+    n_planning_steps: 10
     convergence_threshold: -1e-4
     lr: 0.1

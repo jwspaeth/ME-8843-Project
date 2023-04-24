@@ -26,6 +26,7 @@ class WBConfig:
     video_dir: str = "video_dir"
     video_fps: int = 50  # default for lunar lander
     video_option: bool = False
+    reconstruction_option: bool = False
     video_size: Optional[List[int]] = None
     video_gray_conversion: bool = False
 
@@ -33,7 +34,7 @@ class WBConfig:
 @dataclass
 class LoggingConfig:
     episode_log_interval: int = 5
-    training_log_interval: int = 5
+    training_log_interval: int = 25
     log_file: str = "train.log"
     wb: WBConfig = WBConfig()
 

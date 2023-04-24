@@ -16,7 +16,8 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 """
-- Investigate trajectory optimization
+- Print aggregated metrics at end of training
+- Train for 30 minutes, then evaluate
 - Investigate if using decoder is necessary
 """
 
@@ -168,7 +169,7 @@ class Trainer:
                         observation_queue[-1], observation_queue[-2]
                     ).detach()
                     action = self.policy(state)
-                    # breakpoint()
+
                 observation, reward, terminated, truncated, info = self.env.step(action)
                 if self.env.render_mode is not None:
                     observation = self.env.render()
@@ -193,6 +194,25 @@ class Trainer:
                         reward=reward,
                         terminated=terminated,
                     )
+
+                    # Save reconstructed frame
+                    if self.logger.reconstruction_option:
+                        with torch.no_grad():
+                            # Get reconstructed frame
+                            state_hat = self.models["encoder"](
+                                observation_queue[-2], observation_queue[-1]
+                            )
+                            reconstruction = self.models["decoder"](state_hat)[1]
+                            reconstruction = reconstruction.cpu().numpy() * 255
+                            reconstruction = reconstruction.astype(np.uint8)
+                            reconstruction = np.squeeze(reconstruction, axis=0)
+                            reconstruction = np.transpose(reconstruction, (1, 2, 0))
+                        original = observation_queue[-1].cpu().numpy() * 255
+                        original = original.astype(np.uint8)
+                        original = np.squeeze(original, axis=0)
+                        original = np.transpose(original, (1, 2, 0))
+                        joined = np.concatenate((original, reconstruction), axis=1)
+                        self.logger.log_recon_to_video(image=joined)
                 else:
                     logger.info("\t\tObservation queue is not full, buffering.")
 
@@ -205,14 +225,21 @@ class Trainer:
             episode_expected_reward = episode_reward_sum / step_count
             episode_metrics["expected_reward"] = episode_expected_reward
             episode_metrics["episode_length"] = step_count
+            episode_metrics["replay_buffer_size"] = len(self.replay_buffer)
 
             # Save video to disk and clear buffer
             if self.logger.video_option:
                 self.logger.save_and_clear_video(video_name=f"episode_{episode_count}")
 
+            # Save reconstruction to disk and clear buffer
+            if self.logger.reconstruction_option:
+                self.logger.save_and_clear_recon(
+                    video_name=f"recon_episode_{episode_count}"
+                )
+
             # Log metrics
             if episode_count % self.logging_config.episode_log_interval == 0:
-                self.logger.log_metrics(episode_metrics, self.total_env_step_count)
+                self.logger.log_metrics(episode_metrics)
 
             episode_count += 1
 
@@ -319,7 +346,7 @@ class Trainer:
                 self.model_optimizers[key].step()
 
             # Record metrics
-            training_metrics = {
+            training_step_metrics = {
                 "reconstruction_loss": losses["reconstruction"].item(),
                 "transition_loss": losses["transition"].item(),
                 "reward_loss": losses["reward"].item(),
@@ -329,9 +356,7 @@ class Trainer:
                 % self.logging_config.training_log_interval
                 == 0
             ):
-                self.logger.log_metrics(
-                    training_metrics, self.total_training_step_count
-                )
+                self.logger.log_metrics(training_step_metrics)
 
             self.total_training_step_count += 1
 
@@ -402,9 +427,6 @@ class Trainer:
                 ckpt_config.trainer_config.max_env_steps
             )
             config.trainer_config.batch_size = ckpt_config.trainer_config.batch_size
-            config.trainer_config.training_steps = (
-                ckpt_config.trainer_config.training_steps
-            )
 
         return config
 

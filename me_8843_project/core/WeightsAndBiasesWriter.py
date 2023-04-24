@@ -58,11 +58,13 @@ class WeightsAndBiasesWriter:
         )
 
         self.video_option = config.video_option
+        self.reconstruction_option = config.reconstruction_option
         self.video_dir = config.video_dir
         self.video_fps = config.video_fps
         self.video_size = config.video_size
         self.video_gray_conversion = config.video_gray_conversion
         self.video_frames = []
+        self.recon_frames = []
 
     def add_scalars(self, log_group, data_dict, step_id):
         log_data_dict = {
@@ -73,9 +75,11 @@ class WeightsAndBiasesWriter:
     def add_scalar(self, key, value, step_id):
         wandb.log({key: value}, step=int(step_id))  # type: ignore[attr-defined]
 
-    def log_metrics(self, metrics, step_id):
+    def log_metrics(self, metrics, step_id=None):
         self.print_metrics(metrics)
-        wandb.log(metrics, step=int(step_id))  # type: ignore[attr-defined]
+        if step_id is not None:
+            step_id = int(step_id)
+        wandb.log(metrics, step=step_id)  # type: ignore[attr-defined]
 
     def print_metrics(self, metrics):
         pretty_str = ""
@@ -98,6 +102,35 @@ class WeightsAndBiasesWriter:
     def log_image_to_video(self, image):
         image = copy.deepcopy(image)
         self.video_frames.append(image)
+
+    def log_recon_to_video(self, image):
+        image = copy.deepcopy(image)
+        self.recon_frames.append(image)
+
+    def save_recon(self, video_name):
+        if self.recon_frames:
+            processed_video = copy.deepcopy(self.recon_frames)
+            for i in range(len(processed_video)):
+
+                if self.video_size is not None:
+                    processed_video[i] = cv2.resize(processed_video[i], self.video_size)
+
+                if self.video_gray_conversion:
+                    processed_video[i] = cv2.cvtColor(
+                        processed_video[i], cv2.COLOR_GRAY2RGB
+                    )
+
+            os.makedirs(self.video_dir, exist_ok=True)
+            videodims = [processed_video[0].shape[1], processed_video[0].shape[0]]
+            fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
+            video = cv2.VideoWriter(
+                f"{self.video_dir}/{video_name}.mp4", fourcc, self.video_fps, videodims
+            )
+            for i in range(len(self.recon_frames)):
+                video.write(processed_video[i])
+            video.release()
+        else:
+            raise Exception("No video frames to save.")
 
     def save_video(self, video_name):
         if self.video_frames:
@@ -133,3 +166,10 @@ class WeightsAndBiasesWriter:
 
     def clear_video(self):
         self.video_frames.clear()
+
+    def save_and_clear_recon(self, video_name):
+        self.save_recon(video_name)
+        self.clear_recon()
+
+    def clear_recon(self):
+        self.recon_frames.clear()

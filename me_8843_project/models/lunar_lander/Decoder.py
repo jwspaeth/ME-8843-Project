@@ -13,7 +13,7 @@ class Decoder(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.fc1 = nn.Linear(20, 84)
+        self.fc1 = nn.Linear(30, 84)
         self.fc2 = nn.Linear(84, 120)
         self.fc3 = nn.Linear(120, 640)
         self.deconv1 = nn.ConvTranspose2d(
