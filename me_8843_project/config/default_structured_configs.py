@@ -110,6 +110,8 @@ class TrainerConfig:
     reconstruction_lr: float = 1e-3
     reward_lr: float = 1e-3
     transition_lr: float = 1e-3
+    total_lr: float = 1e-3
+    training_method: str = "reconstruction"
 
 
 @dataclass
@@ -141,7 +143,7 @@ class TrajectoryOptimizerPolicyConfig(PolicyConfig):
     threshold_flag: bool = False
     convergence_threshold: float = 1e-3
     lr: float = 1e-3
-    constraint_multipler: float = 1.0
+    constraint_multiplier: float = 1.0
     n_planning_steps: int = 1000
 
 

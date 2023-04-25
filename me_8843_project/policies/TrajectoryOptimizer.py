@@ -30,22 +30,22 @@ class TrajectoryOptimizerPolicy:
 
     def __call__(self, initial_state):
         # Initialize state and action parameters
-        states_param = torch.rand(
-            (self.n_planning_steps, self.transition_model.state_dim)
-        )
-        states_param = nn.Parameter(states_param)  # Make it a parameter
+        states = torch.rand((self.n_planning_steps, self.transition_model.state_dim))
         actions = torch.rand((self.n_planning_steps, self.transition_model.action_dim))
+
+        # Shift to GPU if available
+        if torch.cuda.is_available():
+            initial_state = initial_state.cuda()
+            states = states.cuda()
+            actions = actions.cuda()
+
+        # Make them parameters
+        states_param = nn.Parameter(states)
         actions_param = nn.Parameter(actions)
 
         # Redefine to use
         states = torch.cat((initial_state, states_param), dim=0)  # Add initial state
         actions = actions_param
-
-        if torch.cuda.is_available():
-            states_param.cuda()
-            actions_param.cuda()
-            states.cuda()
-            actions.cuda()
 
         # Optimize trajectory
         optimizer = torch.optim.Adam([states_param, actions_param], lr=self.lr)
@@ -53,22 +53,27 @@ class TrajectoryOptimizerPolicy:
         # Continue until delta is small enough
         plan_count = 0
         prev_result = None
+        original_result = None
         delta = float("-inf")
         while self.convergence_check(delta, plan_count):
-            result = -1 * self.trajectory_eval_fn(states, actions)  # Minimize negative
+            raw_result = self.trajectory_eval_fn(states, actions)  # Minimize negative
+            result = -1 * raw_result
             optimizer.zero_grad()
             result.backward()
             optimizer.step()
 
             if prev_result is None:
                 prev_result = result
+                original_raw_result = raw_result
             else:
                 delta = result - prev_result
                 prev_result = result
 
             plan_count += 1
-            # logger.info(f"Plan count: {plan_count}, delta: {delta}")
 
+        # logger.info(
+        #     f"Original result: {original_raw_result}, Final result: {raw_result}, difference: {raw_result - original_raw_result}"
+        # )
         return actions[0].detach().cpu().numpy()
 
     def convergence_check(self, delta, plan_count):

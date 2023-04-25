@@ -23,8 +23,10 @@ trainer_config:
   reconstruction_lr: 0.0001
   reward_lr: 0.0001
   transition_lr: 0.0001
+  training_method: "reward"
   policy_config:
     threshold_flag: False
     n_planning_steps: 10
     convergence_threshold: -1e-4
     lr: 0.1
+    constraint_multiplier: 0.1

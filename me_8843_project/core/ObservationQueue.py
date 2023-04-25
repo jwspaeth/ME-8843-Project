@@ -1,5 +1,7 @@
 import copy
 
+import torch
+
 
 class ObservationQueue(list):
     """
@@ -11,6 +13,8 @@ class ObservationQueue(list):
         self.maxlen = maxlen
 
     def append(self, observation):
+        if torch.cuda.is_available():
+            observation = observation.cuda()
         super().append(copy.deepcopy(observation))
         if len(self) > self.maxlen:
             self.pop(0)

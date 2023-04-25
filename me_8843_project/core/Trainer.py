@@ -16,9 +16,8 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 """
-- Print aggregated metrics at end of training
-- Train for 30 minutes, then evaluate
-- Investigate if using decoder is necessary
+- Add actions to reward model
+- What to do about episode termination spike?
 """
 
 
@@ -53,6 +52,8 @@ class Trainer:
         reward_lr=1e-3,
         transition_lr=1e-3,
         batch_size=32,
+        training_method="reconstruction",
+        total_lr=1e-3,
     ):
         # Setup environment
         self.env = gym.make(**env_config)
@@ -91,6 +92,8 @@ class Trainer:
         self.reconstruction_lr = reconstruction_lr
         self.reward_lr = reward_lr
         self.transition_lr = transition_lr
+        self.total_lr = total_lr
+        self.training_method = training_method
 
         # Setup model optimizer
         self.model_optimizers = self.create_model_optimizers()
@@ -238,8 +241,8 @@ class Trainer:
                 )
 
             # Log metrics
-            if episode_count % self.logging_config.episode_log_interval == 0:
-                self.logger.log_metrics(episode_metrics)
+            # if episode_count % self.logging_config.episode_log_interval == 0:
+            #     self.logger.log_metrics(episode_metrics)
 
             episode_count += 1
 
@@ -253,27 +256,43 @@ class Trainer:
         return step_condition and not terminated
 
     def create_model_optimizers(self):
-        model_optimizers = {
-            "reconstruction": None,
-            "reward": None,
-            "transition": None,
-        }
+        if self.training_method == "reconstruction":
+            model_optimizers = {
+                "reconstruction": None,
+                "reward": None,
+                "transition": None,
+            }
 
-        # Reconstruction optimizers optimizes both encoder and decoder
-        reconstruction_params = list(self.models["encoder"].parameters()) + list(
-            self.models["decoder"].parameters()
-        )
-        model_optimizers["reconstruction"] = torch.optim.Adam(
-            reconstruction_params, lr=self.reconstruction_lr
-        )
+            # Reconstruction optimizers optimizes both encoder and decoder
+            reconstruction_params = list(self.models["encoder"].parameters()) + list(
+                self.models["decoder"].parameters()
+            )
+            model_optimizers["reconstruction"] = torch.optim.Adam(
+                reconstruction_params, lr=self.reconstruction_lr
+            )
 
-        reward_params = list(self.models["reward"].parameters())
-        model_optimizers["reward"] = torch.optim.Adam(reward_params, lr=self.reward_lr)
+            reward_params = list(self.models["reward"].parameters())
+            model_optimizers["reward"] = torch.optim.Adam(
+                reward_params, lr=self.reward_lr
+            )
 
-        transition_params = list(self.models["transition"].parameters())
-        model_optimizers["transition"] = torch.optim.Adam(
-            transition_params, lr=self.transition_lr
-        )
+            transition_params = list(self.models["transition"].parameters())
+            model_optimizers["transition"] = torch.optim.Adam(
+                transition_params, lr=self.transition_lr
+            )
+
+        elif self.training_method == "reward":
+            model_optimizers = {
+                "total": None,
+            }
+
+            # Reconstruction optimizers optimizes both encoder and decoder
+            total_params = (
+                list(self.models["encoder"].parameters())
+                + list(self.models["reward"].parameters())
+                + list(self.models["transition"].parameters())
+            )
+            model_optimizers["total"] = torch.optim.Adam(total_params, lr=self.total_lr)
 
         return model_optimizers
 
@@ -292,31 +311,15 @@ class Trainer:
             model_path = os.path.join(checkpoint_folder, f"{model_name}.pt")
             model.load_state_dict(torch.load(model_path))
 
-    def train_models(self):
-        """
-        Different training losses are:
-            - Reconstruction loss
-            - Reward prediction loss
-            - Transition prediction loss
-
-        Trying all in one training first. If this doesn't work,
-        will switch to individual optimizers or separate updates.
-        :return:
-        """
-        logger.info(
-            f"\tTraining models. Replay buffer length: {len(self.replay_buffer)}"
+    def compute_loss(self, batch):
+        obs_1, obs_2, obs_3 = (
+            batch["observation_1"],
+            batch["observation_2"],
+            batch["observation_3"],
         )
-        dataloader = self.replay_buffer.get_dataloader(self.batch_size)
-        # Train models
-        for batch in tqdm(dataloader):
-            # Unpack batch
-            obs_1, obs_2, obs_3 = (
-                batch["observation_1"],
-                batch["observation_2"],
-                batch["observation_3"],
-            )
-            action, reward = batch["action"], batch["reward"]
+        action, reward = batch["action"], batch["reward"]
 
+        if self.training_method == "reconstruction":
             # Get all model outputs
             encoder_state_hat = self.models["encoder"](obs_1, obs_2)
             encoder_next_state_hat = self.models["encoder"](obs_2, obs_3)
@@ -339,6 +342,46 @@ class Trainer:
             )
             losses["reward"] = F.mse_loss(reward_hat, reward)
 
+        elif self.training_method == "reward":
+            # All models share same optimizer. Don't use decoder
+
+            # Get all model outputs
+            encoder_state_hat = self.models["encoder"](obs_1, obs_2)
+            encoder_next_state_hat = self.models["encoder"](obs_2, obs_3)
+            transition_next_state_hat = self.models["transition"](
+                encoder_state_hat, action
+            )
+            reward_hat = self.models["reward"](encoder_state_hat)
+
+            # Calculate losses
+            losses = {}
+            losses["transition"] = F.mse_loss(
+                transition_next_state_hat, encoder_next_state_hat
+            )
+            losses["reward"] = F.mse_loss(reward_hat, reward)
+            losses["total"] = losses["transition"] + losses["reward"]
+
+        return losses
+
+    def train_models(self):
+        """
+        Different training losses are:
+            - Reconstruction loss
+            - Reward prediction loss
+            - Transition prediction loss
+
+        Trying all in one training first. If this doesn't work,
+        will switch to individual optimizers or separate updates.
+        :return:
+        """
+        logger.info(
+            f"\tTraining models. Replay buffer length: {len(self.replay_buffer)}"
+        )
+        dataloader = self.replay_buffer.get_dataloader(self.batch_size)
+        # Train models
+        for batch in tqdm(dataloader):
+            losses = self.compute_loss(batch)
+
             # Update models
             for key in self.model_optimizers.keys():
                 self.model_optimizers[key].zero_grad()
@@ -346,11 +389,9 @@ class Trainer:
                 self.model_optimizers[key].step()
 
             # Record metrics
-            training_step_metrics = {
-                "reconstruction_loss": losses["reconstruction"].item(),
-                "transition_loss": losses["transition"].item(),
-                "reward_loss": losses["reward"].item(),
-            }
+            training_step_metrics = {}
+            for key in losses.keys():
+                training_step_metrics[key + "_loss"] = losses[key].item()
             if (
                 self.total_training_step_count
                 % self.logging_config.training_log_interval

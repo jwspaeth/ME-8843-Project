@@ -44,6 +44,12 @@ class ReplayBuffer:
         """
         Add an observation to the replay buffer. Assume list is in temporal order.
         """
+        if torch.cuda.is_available():
+            observation_1 = observation_1.cuda()
+            observation_2 = observation_2.cuda()
+            observation_3 = observation_3.cuda()
+            action = action.cuda()
+            reward = reward.cuda()
         sample = Sample(
             observation_1=observation_1,
             observation_2=observation_2,
