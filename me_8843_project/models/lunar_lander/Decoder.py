@@ -13,29 +13,38 @@ class Decoder(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.fc1 = nn.Linear(30, 84)
-        self.fc2 = nn.Linear(84, 120)
-        self.fc3 = nn.Linear(120, 640)
+        self.fc1 = nn.Linear(500, 600)
+        self.fc2 = nn.Linear(600, 700)
+        self.fc3 = nn.Linear(700, 800)
         self.deconv1 = nn.ConvTranspose2d(
+            25,
+            20,
+            kernel_size=4,
+            stride=2,
+            padding=0,
+            output_padding=0,
+        )
+
+        self.deconv2 = nn.ConvTranspose2d(
             20,
             16,
             kernel_size=4,
             stride=3,
-            output_padding=1,
+            output_padding=0,
         )
-        self.deconv2 = nn.ConvTranspose2d(
+        self.deconv3 = nn.ConvTranspose2d(
             16,
             6,
             kernel_size=4,
             stride=2,
-            output_padding=1,
+            output_padding=0,
         )
-        self.deconv3 = nn.ConvTranspose2d(
+        self.deconv4 = nn.ConvTranspose2d(
             6,
             1,
             kernel_size=4,
             stride=2,
-            padding=0,
+            padding=1,
             output_padding=0,
         )
 
@@ -50,10 +59,10 @@ class Decoder(pl.LightningModule):
         o = F.relu(self.fc1(state))
         o = F.relu(self.fc2(o))
         o = F.relu(self.fc3(o))
-        o_1 = o[:, :320]
-        o_1 = torch.reshape(o_1, (o_1.shape[0], 20, 4, 4))
-        o_2 = o[:, 320:]
-        o_2 = torch.reshape(o_2, (o_2.shape[0], 20, 4, 4))
+        o_1 = o[:, :400]
+        o_1 = torch.reshape(o_1, (o_1.shape[0], 25, 4, 4))
+        o_2 = o[:, 400:]
+        o_2 = torch.reshape(o_2, (o_2.shape[0], 25, 4, 4))
         o_1 = torch.sigmoid(self.conv_decoder(o_1))
         o_2 = torch.sigmoid(self.conv_decoder(o_2))
 
@@ -62,5 +71,6 @@ class Decoder(pl.LightningModule):
     def conv_decoder(self, x):
         x = F.relu(self.deconv1(x))
         x = F.relu(self.deconv2(x))
-        x = self.deconv3(x)
+        x = F.relu(self.deconv3(x))
+        x = self.deconv4(x)
         return x

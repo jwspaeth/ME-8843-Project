@@ -16,10 +16,11 @@ class Encoder(pl.LightningModule):
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.conv3 = nn.Conv2d(16, 20, 5)
+        self.conv4 = nn.Conv2d(20, 25, 5)
         self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(640, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 30)
+        self.fc1 = nn.Linear(800, 700)
+        self.fc2 = nn.Linear(700, 600)
+        self.fc3 = nn.Linear(600, 500)
 
     def forward(self, o_1, o_2):
         """
@@ -43,4 +44,5 @@ class Encoder(pl.LightningModule):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = self.pool(F.relu(self.conv3(x)))
+        x = self.pool(F.relu(self.conv4(x)))
         return x

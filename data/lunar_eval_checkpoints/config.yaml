@@ -1,0 +1,64 @@
+seed: 0
+evaluate: true
+verbose: true
+force_torch_single_threaded: false
+trainer_config:
+  env_config:
+    id: LunarLander-v2
+    render_mode: rgb_array
+    continuous: true
+    gravity: -10.0
+    enable_wind: false
+    termination_reward: false
+  replay_buffer_config:
+    max_length: 100000
+    true_states: false
+  policy_config:
+    _target_: me_8843_project.policies.RandomPolicy
+  encoder_config:
+    _target_: me_8843_project.models.lunar_lander.Encoder
+  decoder_config:
+    _target_: me_8843_project.models.lunar_lander.Decoder
+  transition_model_config:
+    _target_: me_8843_project.models.lunar_lander.TransitionModel
+    state_dim: 500
+    action_dim: 2
+  reward_model_config:
+    _target_: me_8843_project.models.lunar_lander.RewardModel
+  eval_config:
+    test_episode_count: 10
+  logging_config:
+    episode_log_interval: 1
+    training_log_interval: 5
+    log_file: train.log
+    wb:
+      project_name: me_8843_project
+      entity: jwspaeth
+      group: ''
+      run_name: lunar_lander_eval
+      video_dir: lunar_eval_vid
+      video_fps: 50
+      video_option: false
+      reconstruction_option: false
+      video_size:
+      - 128
+      - 128
+      video_gray_conversion: true
+  checkpoint_interval: -1
+  checkpoint_folder: lunar_eval_checkpoints
+  num_checkpoints: 10
+  max_env_episodes: 10
+  max_env_steps: 10000
+  obs_size:
+  - 128
+  - 128
+  obs_gray_conversion: true
+  batch_size: 32
+  max_training_epochs: 1000
+  reconstruction_lr: 0.0001
+  reward_lr: 0.0001
+  transition_lr: 0.0001
+  total_lr: 0.001
+reload_config:
+  path: lunar_checkpoints
+  reload: true

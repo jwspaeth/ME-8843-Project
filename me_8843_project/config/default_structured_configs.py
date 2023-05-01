@@ -111,7 +111,6 @@ class TrainerConfig:
     reward_lr: float = 1e-3
     transition_lr: float = 1e-3
     total_lr: float = 1e-3
-    training_method: str = "reconstruction"
 
 
 @dataclass
@@ -130,6 +129,23 @@ class LunarLanderEnvConfig(EnvConfig):
     continuous: bool = True
     gravity: float = -10.0
     enable_wind: bool = False
+    termination_reward: bool = True
+
+
+@dataclass
+class HopperEnvConfig(EnvConfig):
+    id: str = "Hopper-v4"
+    terminate_when_unhealthy: bool = True
+
+
+@dataclass
+class ReacherEnvConfig(EnvConfig):
+    id: str = "Reacher-v4"
+
+
+@dataclass
+class SwimmerEnvConfig(EnvConfig):
+    id: str = "Swimmer-v4"
 
 
 @dataclass
@@ -143,7 +159,7 @@ class TrajectoryOptimizerPolicyConfig(PolicyConfig):
     threshold_flag: bool = False
     convergence_threshold: float = 1e-3
     lr: float = 1e-3
-    constraint_multiplier: float = 1.0
+    initial_constraint_multiplier: float = 1.0
     n_planning_steps: int = 1000
 
 
@@ -165,6 +181,8 @@ class LunarRewardModelConfig(RewardModelConfig):
 @dataclass
 class LunarTransitionModelConfig(TransitionModelConfig):
     _target_: str = "me_8843_project.models.lunar_lander.TransitionModel"
+    state_dim: int = 40
+    action_dim: int = 2
 
 
 # Register structured configs in hydra registry
@@ -174,6 +192,24 @@ cs.store(
     group="envs",
     name="lunar_lander_config",
     node=LunarLanderEnvConfig,
+)
+cs.store(
+    package="trainer_config.env_config",
+    group="envs",
+    name="hopper_config",
+    node=HopperEnvConfig,
+)
+cs.store(
+    package="trainer_config.env_config",
+    group="envs",
+    name="reacher_config",
+    node=ReacherEnvConfig,
+)
+cs.store(
+    package="trainer_config.env_config",
+    group="envs",
+    name="swimmer_config",
+    node=SwimmerEnvConfig,
 )
 cs.store(
     package="trainer_config.policy_config",

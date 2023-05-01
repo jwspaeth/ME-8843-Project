@@ -62,6 +62,7 @@ class WeightsAndBiasesWriter:
         self.video_dir = config.video_dir
         self.video_fps = config.video_fps
         self.video_size = config.video_size
+        self.recon_size = [self.video_size[0] * 2, self.video_size[1]]
         self.video_gray_conversion = config.video_gray_conversion
         self.video_frames = []
         self.recon_frames = []
@@ -113,7 +114,7 @@ class WeightsAndBiasesWriter:
             for i in range(len(processed_video)):
 
                 if self.video_size is not None:
-                    processed_video[i] = cv2.resize(processed_video[i], self.video_size)
+                    processed_video[i] = cv2.resize(processed_video[i], self.recon_size)
 
                 if self.video_gray_conversion:
                     processed_video[i] = cv2.cvtColor(
@@ -129,6 +130,9 @@ class WeightsAndBiasesWriter:
             for i in range(len(self.recon_frames)):
                 video.write(processed_video[i])
             video.release()
+            logger.info(
+                f"Saved reconstruction video to {self.video_dir}/{video_name}.mp4"
+            )
         else:
             raise Exception("No video frames to save.")
 
@@ -157,6 +161,7 @@ class WeightsAndBiasesWriter:
             for i in range(len(self.video_frames)):
                 video.write(processed_video[i])
             video.release()
+            logger.info(f"Saved video to {self.video_dir}/{video_name}.mp4")
         else:
             raise Exception("No video frames to save.")
 

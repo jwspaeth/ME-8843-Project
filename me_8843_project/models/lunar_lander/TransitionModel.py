@@ -9,15 +9,15 @@ class TransitionModel(pl.LightningModule):
     model(s, a) -> s'. Fully connected model.
     """
 
-    def __init__(self):
+    def __init__(self, state_dim=40, action_dim=3):
         super().__init__()
         self.save_hyperparameters()
-        self.state_dim = 30
-        self.action_dim = 2
+        self.state_dim = state_dim
+        self.action_dim = action_dim
 
-        self.fc1 = nn.Linear(32, 30)
-        self.fc2 = nn.Linear(30, 30)
-        self.fc3 = nn.Linear(30, 30)
+        self.fc1 = nn.Linear(self.state_dim + self.action_dim, 500)
+        self.fc2 = nn.Linear(500, 500)
+        self.fc3 = nn.Linear(500, 500)
 
     def forward(self, state, action):
         """

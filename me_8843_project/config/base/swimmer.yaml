@@ -1,6 +1,6 @@
 defaults:
   - base_config
-  - /envs: lunar_lander_config
+  - /envs: swimmer_config
   - /policies: random_policy_config
   #- /policies: trajectory_optimizer_policy_config
   - /models/encoder: lunar_encoder_config
@@ -13,19 +13,18 @@ trainer_config:
   transition_model_config:
     state_dim: 500
     action_dim: 2
-  env_config:
-    termination_reward: False
   logging_config:
-      wb:
-        run_name: lunar_lander_eval
-        video_dir: lunar_eval_vid
-        video_size: [128, 128]
-        video_gray_conversion: True
-      episode_log_interval: 1
-      training_log_interval: 5
-  checkpoint_folder: lunar_eval_checkpoints
+    wb:
+      run_name: swimmer_eval
+      video_dir: swimmer_eval_vid
+      video_size: [128, 128]
+      video_gray_conversion: True
+    episode_log_interval: 1
+    training_log_interval: 5
+  checkpoint_folder: swimmer_eval_checkpoints
   obs_size: [128, 128]
   obs_gray_conversion: True
+  max_env_steps: 1000
   max_env_episodes: 1
   max_training_epochs: 1000
   reconstruction_lr: 0.0001

@@ -1,0 +1,40 @@
+defaults:
+  - base_config
+  - /envs: hopper_config
+  #- /policies: random_policy_config
+  - /policies: trajectory_optimizer_policy_config
+  - /models/encoder: lunar_encoder_config
+  - /models/decoder: lunar_decoder_config
+  - /models/transition_model: lunar_transition_model_config
+  - /models/reward_model: lunar_reward_model_config
+  - _self_
+
+trainer_config:
+  transition_model_config:
+    state_dim: 500
+    action_dim: 3
+  env_config:
+    terminate_when_unhealthy: True
+  logging_config:
+    wb:
+      run_name: hopper_eval
+      video_dir: hopper_eval_vid
+      video_size: [128, 128]
+      video_gray_conversion: True
+    episode_log_interval: 1
+    training_log_interval: 5
+  checkpoint_folder: hopper_eval_checkpoints
+  obs_size: [128, 128]
+  obs_gray_conversion: True
+  max_env_steps: 1000
+  max_env_episodes: 1
+  max_training_epochs: 1000
+  reconstruction_lr: 0.0001
+  reward_lr: 0.0001
+  transition_lr: 0.0001
+  policy_config:
+    threshold_flag: False
+    n_planning_steps: 50
+    convergence_threshold: -1e-4
+    lr: 0.01
+    initial_constraint_multiplier: 0.1
